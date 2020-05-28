@@ -18,11 +18,29 @@
         app:layout_constraintTop_toTopOf="parent" />
 
     <androidx.appcompat.widget.AppCompatButton
-        android:id="@+id/btn"
+        android:id="@+id/btn_covert_url"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="转换网址"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toBottomOf="@id/et" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_start_server"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="启动服务"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_covert_url" />
+
+    <androidx.appcompat.widget.AppCompatButton
+        android:id="@+id/btn_stop_server"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="停止服务"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/btn_start_server" />
 </androidx.constraintlayout.widget.ConstraintLayout>
