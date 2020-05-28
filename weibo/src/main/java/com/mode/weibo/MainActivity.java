@@ -28,6 +28,10 @@ public class MainActivity extends AppCompatActivity {
                 v.postDelayed(new Runnable() {
                     @Override
                     public void run() {
+                        if (mBtn == null) {
+                            return;
+                        }
+                        Toast.makeText(MainActivity.this,"开始转换",Toast.LENGTH_LONG).show();
                         String string = mEt.getText().toString();
                         if (!TextUtils.isEmpty(string)) {
                             Intent intent = new Intent();
