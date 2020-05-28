@@ -1,0 +1,4 @@
+rootProject.name='HookModuleTest'
+include ':app'
+include ':weibo'
+include ':jinritoutiao'
