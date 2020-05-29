@@ -1,35 +1,23 @@
 package com.mode.weibo;
 
+import android.content.Intent;
+import android.os.Bundle;
+import android.text.TextUtils;
+import android.view.View;
+import android.widget.Toast;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.AppCompatButton;
 import androidx.appcompat.widget.AppCompatEditText;
 
-import android.content.Intent;
-import android.net.Uri;
-import android.os.Bundle;
-import android.text.TextUtils;
-import android.util.Log;
-import android.view.View;
-import android.widget.Button;
-import android.widget.Toast;
-
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.net.InetAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-
 public class MainActivity extends AppCompatActivity {
 
-    public static final String            TAG = "MainActivity";
-    private             AppCompatEditText mEt;
-    private             AppCompatButton   mBtnCoverUrl;
-    private             AppCompatButton   mBtnStartServer;
-    private             AppCompatButton   mBtnStopServer;
-    private             AppCompatActivity mActivity;
+    public static final String TAG = "MainActivity";
+    private AppCompatEditText mEt;
+    private AppCompatButton mBtnCoverUrl;
+    private AppCompatButton mBtnStartServer;
+    private AppCompatButton mBtnStopServer;
+    private AppCompatActivity mActivity;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,6 +53,12 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 Toast.makeText(mActivity, "服务器启动", Toast.LENGTH_LONG).show();
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        new TcpServer().startServer();
+                    }
+                }).start();
             }
         });
         mBtnStopServer = findViewById(R.id.btn_stop_server);
