@@ -12,3 +12,7 @@
 /captures
 .externalNativeBuild
 .cxx
+/.idea/
+app/libs/
+jinritoutiao/libs/
+weibo/libs/
