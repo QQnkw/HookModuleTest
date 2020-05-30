@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.text.TextUtils;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -15,7 +16,9 @@ import org.json.JSONArray;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.lang.reflect.Field;
 import java.net.ServerSocket;
@@ -100,7 +103,7 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                             if (TextUtils.isEmpty(mFormClientData)) {
                                 str = (String) param.args[0];
                             } else {
-                                str = mFormClientData.replace(",", "和");
+                                str = mFormClientData;
                                 param.args[0] = str;
                             }
                             XposedBridge.log("源码执行前AAA" + str);
@@ -149,9 +152,9 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                                         sb.append("和").append(short_url);
                                     }
                                 }
-                                final String encodeUrl = sb == null ? "无转换链接" : sb.toString();
-                                XposedBridge.log("源码执行后VVV" + encodeUrl);
-                                mHandler.obtainMessage(2, encodeUrl).sendToTarget();
+                                mEncodeUrl = sb == null ? "无转换链接" : sb.toString();
+                                XposedBridge.log("源码执行后VVV" + mEncodeUrl);
+                                mHandler.obtainMessage(3, mEncodeUrl).sendToTarget();
                             }
                         }
                     });
@@ -231,17 +234,15 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                                             }
                                             break;
                                         case 1:
+                                            if (mContext != null) {
+                                                Toast.makeText(mContext, mFormClientData, Toast.LENGTH_LONG).show();
+                                            }
+                                            break;
+                                        case 2:
                                             if (mOriginalComposerManager != null) {
                                                 //c()是构造发布数据之前的发布操作
                                                 XposedHelpers.callMethod(mOriginalComposerManager, "c");
                                             }
-                                            break;
-                                        case 2:
-                                            String encodeUrl = (String) msg.obj;
-                                            if (mContext != null) {
-                                                Toast.makeText(mContext, encodeUrl, Toast.LENGTH_LONG).show();
-                                            }
-                                            mEncodeUrl = encodeUrl;
                                             break;
                                         case 3:
                                             if (mContext != null) {
@@ -275,10 +276,10 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                             if (mServer != null) {
                                 if (!mServer.isClosed()) {
                                     mServer.close();
-                                    mServer = null;
                                 }
-                                mEnableServer = false;
+                                mServer = null;
                             }
+                            mEnableServer = false;
                         }
                     });
         }
@@ -287,72 +288,75 @@ public class WeiBoHook implements IXposedHookLoadPackage {
 
     private void startTcpServer() {
         new Thread(new Runnable() {
+            private InputStream mInputStream;
+            private OutputStream mOutputStream;
             private Socket mClient;
-            private BufferedReader mBr;
-            private BufferedWriter mBw;
 
             @Override
             public void run() {
                 try {
-                    mServer = new ServerSocket(10010);
-                    //提示服务器启动
+                    mServer = new ServerSocket(8090);
                     mHandler.sendEmptyMessage(0);
+                    //提示服务器启动
                     while (mEnableServer) {
                         //调用accept()方法开始监听，等待客户端的连接
                         mClient = mServer.accept();
                         try {
-                            // 获得和客户端相连的IO输入流
-                            mBr = new BufferedReader(new InputStreamReader(mClient.getInputStream()));
+                            mEncodeUrl = null;
+                            mFormClientData = null;
+                            mInputStream = mClient.getInputStream();
+                            byte[] arr = new byte[1024];
                             StringBuilder sb = new StringBuilder();
-                            String info = null;
-                            while ((info = mBr.readLine()) != null) {//循环读取客户端的信息
-                                sb.append(info).append(",");
+                            int length = 0;
+                            if ((length = mInputStream.read(arr)) != -1) {
+                                String str = new String(arr, 0, length);
+                                sb.append(str);
                             }
                             mFormClientData = sb.toString();
-                            String text = "客服端数据:" + sb.toString();
-                            XposedBridge.log(text);
-                            mHandler.obtainMessage(3, text).sendToTarget();
-//                            mHandler.sendEmptyMessage(1);
-                            mClient.shutdownInput();
+                            mHandler.obtainMessage(1, mFormClientData).sendToTarget();
+                            mHandler.sendEmptyMessage(2);
                             int waitTime = 0;
                             //获得和客户端相连的IO输出流
-                            mBw = new BufferedWriter(new OutputStreamWriter(mClient.getOutputStream()));
+                            mOutputStream = mClient.getOutputStream();
                             while (true) {
                                 if (TextUtils.isEmpty(mEncodeUrl)) {
                                     Thread.sleep(1000);
                                     waitTime++;
                                     if (waitTime == 5) {
-                                        mBw.write("url转换失败");
-                                        mBw.flush();
+                                        mOutputStream.write("URL转换失败".getBytes());
                                         break;
                                     }
                                 } else {
-                                    mBw.write(mEncodeUrl);
-                                    mBw.flush();
+                                    mOutputStream.write(mEncodeUrl.getBytes());
                                     break;
                                 }
                             }
                         } catch (IOException | InterruptedException e) {
-                            e.printStackTrace();
+                            XposedBridge.log(e);
                         } finally {
                             //关闭资源
                             try {
-                                if (mBr != null) {
-                                    mBr.close();
-                                }
-                                if (mBw != null) {
-                                    mBw.close();
-                                }
                                 if (mClient != null) {
-                                    mClient.close();
+                                    if (!mClient.isClosed()) {
+                                        mClient.close();
+                                    }
+                                    mClient = null;
+                                }
+                                if (mInputStream != null) {
+                                    mInputStream.close();
+                                    mInputStream = null;
+                                }
+                                if (mOutputStream != null) {
+                                    mOutputStream.close();
+                                    mOutputStream = null;
                                 }
                             } catch (IOException e) {
-                                e.printStackTrace();
+                                XposedBridge.log(e);
                             }
                         }
                     }
                 } catch (IOException e) {
-                    e.printStackTrace();
+                    XposedBridge.log(e);
                 }
             }
         }).start();
