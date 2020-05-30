@@ -1,18 +1,25 @@
 package com.mode.weibo;
 
 import android.app.Activity;
-import android.content.BroadcastReceiver;
 import android.content.Context;
-import android.content.Intent;
-import android.content.IntentFilter;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.text.TextUtils;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
+
 import org.json.JSONArray;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.lang.reflect.Field;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.List;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
@@ -20,18 +27,16 @@ import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
 import de.robv.android.xposed.callbacks.XC_LoadPackage;
-import okhttp3.Call;
-import okhttp3.Callback;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
 
 public class WeiBoHook implements IXposedHookLoadPackage {
 
-    private Context mContext;
-    private DataReceived mDataReceived;
-    private Object mOriginalComposerManager;
-    private String mUrlListData;
+    private Context      mContext;
+    private Object       mOriginalComposerManager;
+    private String       mFormClientData = null;
+    private String       mEncodeUrl      = null;
+    private Handler      mHandler;
+    private boolean      mEnableServer   = true;
+    private ServerSocket mServer;
 
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
@@ -92,25 +97,14 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                             super.beforeHookedMethod(param);
                             //用户输入的参数
                             String str = null;
-                            if (TextUtils.isEmpty(mUrlListData)) {
+                            if (TextUtils.isEmpty(mFormClientData)) {
                                 str = (String) param.args[0];
                             } else {
-                                String[] urlArr = mUrlListData.split(",");
-                                StringBuilder sb = new StringBuilder();
-                                for (String url : urlArr) {
-                                    sb.append(url).append("和");
-                                }
-                                str = sb.toString();
+                                str = mFormClientData.replace(",", "和");
                                 param.args[0] = str;
                             }
                             XposedBridge.log("源码执行前AAA" + str);
                             //                            printStackInfo();
-                        }
-
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            super.afterHookedMethod(param);
-                            XposedBridge.log("源码执行后VVV");
                         }
                     });
            /* XposedHelpers.findAndHookMethod(Application.class, "attach", Context.class, new XC_MethodHook() {
@@ -137,12 +131,6 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                     , JSONArray.class
                     , new XC_MethodHook() {
                         @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            super.beforeHookedMethod(param);
-                            XposedBridge.log("源码执行前AAA");
-                        }
-
-                        @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             super.afterHookedMethod(param);
                             if (mContext != null) {
@@ -158,21 +146,13 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                                     sb = new StringBuilder();
                                     for (Object o : url_struct) {
                                         String short_url = (String) short_urlField.get(o);
-                                        sb.append("\n").append(short_url);
+                                        sb.append("和").append(short_url);
                                     }
                                 }
                                 final String encodeUrl = sb == null ? "无转换链接" : sb.toString();
                                 XposedBridge.log("源码执行后VVV" + encodeUrl);
-
-                                ((Activity) mContext).runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        Toast.makeText(mContext, encodeUrl, Toast.LENGTH_LONG).show();
-                                    }
-                                });
+                                mHandler.obtainMessage(2, encodeUrl).sendToTarget();
                             }
-                            //                            printStackInfo();
-                            //                            createNetRequest();
                         }
                     });
             //带有发布数据的发布方法
@@ -209,8 +189,6 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                         @Override
                         protected void afterHookedMethod(final MethodHookParam param) throws Throwable {
                             super.afterHookedMethod(param);
-                            XposedBridge.log("源码执行后VVV");
-                            //                            printStackInfo();
                             mOriginalComposerManager = param.thisObject;
                         }
                     });
@@ -240,22 +218,40 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                     , Bundle.class
                     , new XC_MethodHook() {
                         @Override
-                        protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
-                            super.beforeHookedMethod(param);
-                            XposedBridge.log("源码执行前AAA");
-                        }
-
-                        @Override
                         protected void afterHookedMethod(MethodHookParam param) throws Throwable {
                             super.afterHookedMethod(param);
-                            XposedBridge.log("源码执行后VVV");
                             mContext = (Context) param.thisObject;
-                            if (mContext != null) {
-                                mDataReceived = new DataReceived();
-                                IntentFilter intentFilter = new IntentFilter();
-                                intentFilter.addAction("com.wb.data.url");
-                                mContext.registerReceiver(mDataReceived, intentFilter);
-                            }
+                            mHandler = new Handler(mContext.getMainLooper()) {
+                                @Override
+                                public void handleMessage(@NonNull Message msg) {
+                                    switch (msg.what) {
+                                        case 0:
+                                            if (mContext != null) {
+                                                Toast.makeText(mContext, "服务器启动成功", Toast.LENGTH_LONG).show();
+                                            }
+                                            break;
+                                        case 1:
+                                            if (mOriginalComposerManager != null) {
+                                                //c()是构造发布数据之前的发布操作
+                                                XposedHelpers.callMethod(mOriginalComposerManager, "c");
+                                            }
+                                            break;
+                                        case 2:
+                                            String encodeUrl = (String) msg.obj;
+                                            if (mContext != null) {
+                                                Toast.makeText(mContext, encodeUrl, Toast.LENGTH_LONG).show();
+                                            }
+                                            mEncodeUrl = encodeUrl;
+                                            break;
+                                        case 3:
+                                            if (mContext != null) {
+                                                Toast.makeText(mContext, (String) msg.obj, Toast.LENGTH_LONG).show();
+                                            }
+                                            break;
+                                    }
+                                }
+                            };
+                            startTcpServer();
                         }
                     });
             //注销mContext,注销数据广播接收器
@@ -266,72 +262,99 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                         @Override
                         protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
                             super.beforeHookedMethod(param);
-                            XposedBridge.log("源码执行前AAA");
                             if (mContext != null) {
-                                if (mDataReceived != null) {
-                                    mContext.unregisterReceiver(mDataReceived);
-                                }
-                                mDataReceived = null;
                                 mContext = null;
+                            }
+                            if (mOriginalComposerManager != null) {
                                 mOriginalComposerManager = null;
                             }
-                        }
-
-                        @Override
-                        protected void afterHookedMethod(MethodHookParam param) throws Throwable {
-                            super.afterHookedMethod(param);
-                            XposedBridge.log("源码执行后VVV");
+                            if (mHandler != null) {
+                                mHandler.removeCallbacksAndMessages(null);
+                                mHandler = null;
+                            }
+                            if (mServer != null) {
+                                if (!mServer.isClosed()) {
+                                    mServer.close();
+                                    mServer = null;
+                                }
+                                mEnableServer = false;
+                            }
                         }
                     });
         }
 
     }
 
-    private void createNetRequest() {
-        String url = "http://wwww.baidu.com";
-        OkHttpClient okHttpClient = new OkHttpClient();
-        Request request = new Request.Builder()
-                .url(url)
-                .get()//默认就是GET请求，可以不写
-                .build();
-        Call call = okHttpClient.newCall(request);
-        call.enqueue(new Callback() {
-            @Override
-            public void onFailure(Call call, IOException e) {
-                XposedBridge.log("onFailure:" + e.getMessage());
-            }
+    private void startTcpServer() {
+        new Thread(new Runnable() {
+            private Socket mClient;
+            private BufferedReader mBr;
+            private BufferedWriter mBw;
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
-                XposedBridge.log("onResponse:" + response.body().string());
-            }
-        });
-    }
-
-    private class DataReceived extends BroadcastReceiver {
-        @Override
-        public void onReceive(Context context, Intent intent) {
-            mUrlListData = intent.getStringExtra("UrlListData");
-            if (!TextUtils.isEmpty(mUrlListData)) {
+            public void run() {
                 try {
-                    //c()是构造发布数据之前的发布操作
-                    XposedHelpers.callMethod(mOriginalComposerManager, "c");
-                    XposedBridge.log("成功了");
-                } catch (Exception e) {
-                    XposedBridge.log("出错了:" + e.getMessage());
+                    mServer = new ServerSocket(10010);
+                    //提示服务器启动
+                    mHandler.sendEmptyMessage(0);
+                    while (mEnableServer) {
+                        //调用accept()方法开始监听，等待客户端的连接
+                        mClient = mServer.accept();
+                        try {
+                            // 获得和客户端相连的IO输入流
+                            mBr = new BufferedReader(new InputStreamReader(mClient.getInputStream()));
+                            StringBuilder sb = new StringBuilder();
+                            String info = null;
+                            while ((info = mBr.readLine()) != null) {//循环读取客户端的信息
+                                sb.append(info).append(",");
+                            }
+                            mFormClientData = sb.toString();
+                            String text = "客服端数据:" + sb.toString();
+                            XposedBridge.log(text);
+                            mHandler.obtainMessage(3, text).sendToTarget();
+//                            mHandler.sendEmptyMessage(1);
+                            mClient.shutdownInput();
+                            int waitTime = 0;
+                            //获得和客户端相连的IO输出流
+                            mBw = new BufferedWriter(new OutputStreamWriter(mClient.getOutputStream()));
+                            while (true) {
+                                if (TextUtils.isEmpty(mEncodeUrl)) {
+                                    Thread.sleep(1000);
+                                    waitTime++;
+                                    if (waitTime == 5) {
+                                        mBw.write("url转换失败");
+                                        mBw.flush();
+                                        break;
+                                    }
+                                } else {
+                                    mBw.write(mEncodeUrl);
+                                    mBw.flush();
+                                    break;
+                                }
+                            }
+                        } catch (IOException | InterruptedException e) {
+                            e.printStackTrace();
+                        } finally {
+                            //关闭资源
+                            try {
+                                if (mBr != null) {
+                                    mBr.close();
+                                }
+                                if (mBw != null) {
+                                    mBw.close();
+                                }
+                                if (mClient != null) {
+                                    mClient.close();
+                                }
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    }
+                } catch (IOException e) {
+                    e.printStackTrace();
                 }
             }
-
-        }
-    }
-
-    private void printStackInfo() {
-        StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
-        for (StackTraceElement stackTraceElement : stackTrace) {
-            String className = stackTraceElement.getClassName();
-            String methodName = stackTraceElement.getMethodName();
-            String path = "类名:" + className + "----方法名：" + methodName;
-            XposedBridge.log(path);
-        }
+        }).start();
     }
 }
