@@ -17,8 +17,6 @@ import java.net.Socket;
 public class MainActivity extends AppCompatActivity {
 
     public static final String            TAG = "MainActivity";
-    private             AppCompatEditText mEt;
-    private             AppCompatButton   mBtnCoverUrl;
     private             AppCompatButton   mBtnStartServer;
     private             AppCompatButton   mBtnStopServer;
     private             AppCompatActivity mActivity;
@@ -28,13 +26,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         mActivity = this;
         setContentView(R.layout.activity_main);
-        mEt = findViewById(R.id.et);
-        mBtnCoverUrl = findViewById(R.id.btn_covert_url);
-        mBtnCoverUrl.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-            }
-        });
 
         mBtnStartServer = findViewById(R.id.btn_start_server);
         mBtnStartServer.setOnClickListener(new View.OnClickListener() {
@@ -47,7 +38,6 @@ public class MainActivity extends AppCompatActivity {
         mBtnStopServer.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mEnableServer = false;
                 try {
                     if (mServer != null) {
                         if (!mServer.isClosed()) {
@@ -63,7 +53,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String       mEncodeUrl    = "1234567890";
-    private boolean      mEnableServer = true;
     private ServerSocket mServer;
 
     private void startTcpServer() {
@@ -78,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
                     mServer = new ServerSocket(8090);
                     Log.d(TAG, "服务器启动");
                     //提示服务器启动
-                    while (mEnableServer) {
+                    while (true) {
                         //调用accept()方法开始监听，等待客户端的连接
                         mClient = mServer.accept();
                         try {
@@ -97,7 +86,7 @@ public class MainActivity extends AppCompatActivity {
                             mOutputStream = mClient.getOutputStream();
                             while (true) {
                                 if (TextUtils.isEmpty(mEncodeUrl)) {
-                                    Thread.sleep(1000);
+                                    Thread.sleep(250);
                                     waitTime++;
                                     if (waitTime == 5) {
                                         mOutputStream.write(mEncodeUrl.getBytes());

@@ -38,7 +38,6 @@ public class WeiBoHook implements IXposedHookLoadPackage {
     private String       mFormClientData = null;
     private String       mEncodeUrl      = null;
     private Handler      mHandler;
-    private boolean      mEnableServer   = true;
     private ServerSocket mServer;
 
     @Override
@@ -279,7 +278,6 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                                 }
                                 mServer = null;
                             }
-                            mEnableServer = false;
                         }
                     });
         }
@@ -298,7 +296,7 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                     mServer = new ServerSocket(8090);
                     mHandler.sendEmptyMessage(0);
                     //提示服务器启动
-                    while (mEnableServer) {
+                    while (true) {
                         //调用accept()方法开始监听，等待客户端的连接
                         mClient = mServer.accept();
                         try {
@@ -320,7 +318,7 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                             mOutputStream = mClient.getOutputStream();
                             while (true) {
                                 if (TextUtils.isEmpty(mEncodeUrl)) {
-                                    Thread.sleep(1000);
+                                    Thread.sleep(250);
                                     waitTime++;
                                     if (waitTime == 5) {
                                         mOutputStream.write("URL转换失败".getBytes());
