@@ -15,9 +15,10 @@ public class WBTcpClient {
     private Socket mClient;
     private OutputStream outputStream;
     private InputStream inputStream;
-    private String mSrcUrl = "https://news.163.com/20/0530/19/FDTA0RJP0001899O.html";
+    private String mSrcUrl = "https://www.baidu.com/";
 
-    public WBTcpClient() {
+    public WBTcpClient(String srcUrl) {
+        mSrcUrl = srcUrl;
         try {
             mClient = new Socket(HOST, PORT);
         } catch (IOException e) {
