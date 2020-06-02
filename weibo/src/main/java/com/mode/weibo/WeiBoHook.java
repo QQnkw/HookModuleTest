@@ -272,11 +272,15 @@ public class WeiBoHook implements IXposedHookLoadPackage {
                                 mHandler.removeCallbacksAndMessages(null);
                                 mHandler = null;
                             }
-                            if (mServer != null) {
-                                if (!mServer.isClosed()) {
-                                    mServer.close();
+                            try {
+                                if (mServer != null) {
+                                    if (!mServer.isClosed()) {
+                                        mServer.close();
+                                    }
+                                    mServer = null;
                                 }
-                                mServer = null;
+                            } catch (IOException e) {
+                                XposedBridge.log(e);
                             }
                         }
                     });
